@@ -7,7 +7,7 @@ static double segundos(void)
 {
     struct timespec t;
     clock_gettime(CLOCK_MONOTONIC, &t);
-    return t.tv_sec + t.tv_nsec / 1e9;
+    return t.tv_sec + t.tv_nsec / 1e9; // convierte los nanosegundos a segundos
 }
 
 int main(int argc, char *argv[])
