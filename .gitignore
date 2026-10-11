@@ -1,0 +1,23 @@
+# Binarios compilados
+bin/
+*.o
+
+# Resultados de pruebas rápidas y copias de corridas anteriores
+results/quick/
+*.bak
+
+# Entorno virtual de Python y cachés
+.venv/
+__pycache__/
+*.pyc
+
+# Archivos de editor y sistema
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Ejecutables
+montecarlo_pi_serial
+montecarlo_e_serial
+montecarlo_pi_mpi
+montecarlo_e_mpi
