@@ -8,7 +8,7 @@ static long long contar_aciertos_pi(long long n)
     for (long long i = 0; i < n; i++) {
         double x = drand48();
         double y = drand48();
-        if (x * x + y * y <= 1.0) {
+        if (x * x + y * y <= 1.0) { // punto dentro del circulo
             aciertos++;
         }
     }
