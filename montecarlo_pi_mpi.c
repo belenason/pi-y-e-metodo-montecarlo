@@ -13,7 +13,7 @@ int main(int argc, char *argv[])
     MPI_Comm_size(MPI_COMM_WORLD, &procesos);
 
     if (rank == 0 && !leer_argumentos(argc, argv, datos)) {
-        MPI_Abort(MPI_COMM_WORLD, 1); // asegura que todos los procesos se detengan si hay argumentos invalidos o algún error en los mismos
+        MPI_Abort(MPI_COMM_WORLD, 1); // asegura que todos los procesos se detengan si hay argumentos invalidos o algún error en los mismos, y además permite hacer un solo broadcast
     }
     MPI_Bcast(datos, 2, MPI_LONG_LONG, 0, MPI_COMM_WORLD);
 
