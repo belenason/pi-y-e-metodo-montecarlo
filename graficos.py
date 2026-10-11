@@ -9,8 +9,11 @@ sistema medido) y genera en resultados/:
     intuicion.png            grafico para explicar cómo funcionan los dos experimentos
     convergencia.png         demuestra como las estimaciones se acercan al valor real al aumentar N
     error.png                comprueba que el error baja como 1/raíz(N)
+    error_procesos.png       comprueba que el error no depende de la cantidad de procesos
     tiempo_<sistema>.png     tiempo en función de la cantidad de procesos
+    tiempo_n_<sistema>.png   tiempo en función de N, con la versión serial incluida
     speedup_<sistema>.png    muestra el speedup obtenido en función de la cantidad de procesos
+    speedup.png              compara el speedup entre todos los sistemas evaluados
     eficiencia.png           grafica final para comparar eficiencia entre todos los sistemas evaluados
 """
 import glob
@@ -86,6 +89,19 @@ def eje_de_procesos(eje, procesos):
     eje.minorticks_off()
     eje.set_xlabel("P (procesos)")
     return logaritmico
+
+
+def eje_de_speedup_logaritmico(eje, procesos):
+    """Speedup en escala log-log: el ideal S = P sigue siendo una recta."""
+    eje.set_yscale("log", base=2)
+    eje.set_yticks(procesos)
+    eje.set_yticklabels([str(p) for p in procesos])
+    eje.minorticks_off()
+
+
+def tonos_de_azul(cantidad):
+    """Una escala de azules, de claro a oscuro, con tantos tonos como líneas haya que dibujar."""
+    return plt.cm.Blues(np.linspace(0.35, 1, cantidad))
 
 
 
@@ -199,11 +215,7 @@ def grafico_por_procesos(resumen, sistema, columna, etiqueta, archivo):
         if columna == "t_mediana":
             eje.set_yscale("log")
         elif logaritmico:
-            # Speedup en escala log-log: el ideal S = P sigue siendo una recta.
-            eje.set_yscale("log", base=2)
-            eje.set_yticks(procesos)
-            eje.set_yticklabels([str(p) for p in procesos])
-            eje.minorticks_off()
+            eje_de_speedup_logaritmico(eje, procesos)
         eje.set_title(f"{NOMBRE[constante]} — sistema: {sistema}")
     ejes[0].set_ylabel(etiqueta)
     ejes[1].legend(loc="center left", bbox_to_anchor=(1, 0.5))
@@ -215,27 +227,98 @@ def grafico_por_procesos(resumen, sistema, columna, etiqueta, archivo):
 
 
 
-# Compara la eficiencia de los distintos sistemas usando el N más grande. 
-# Se puede ver cómo decae el rendimiento al agregar más procesos debido 
-# al tiempo que se pierde en la comunicación de MPI.
-def grafico_eficiencia(resumen):
-    """Eficiencia con el N más grande medido en todos los sistemas, una línea por sistema."""
-    sistemas = sorted(resumen["sistema"].unique())
-    n = min(resumen[resumen["sistema"] == s]["N"].max() for s in sistemas)
+# Grafica el tiempo según la cantidad de muestras (N), con la versión serial como referencia.
+# El tiempo de cómputo crece en forma lineal con N (rectas paralelas en log-log). Con N chico
+# las versiones paralelas quedan por encima de la serial: lanzar y comunicar los procesos
+# cuesta más que lo que se ahorra, y recién a partir de cierto N conviene paralelizar.
+def grafico_tiempo_por_n(resumen, sistema):
+    """Tiempo en función de N: un panel por constante, la serial y una línea por cada P."""
+    r = resumen[resumen["sistema"] == sistema]
+    procesos = sorted(r["P"].unique())
     fig, ejes = plt.subplots(1, 2, figsize=(11, 4.5), sharey=True)
     for eje, constante in zip(ejes, ["pi", "e"]):
-        eje.axhline(1, linestyle="--", color=GRIS, linewidth=1.5, label="Ideal")
+        c = r[r["constante"] == constante]
+        serial = c.groupby("N")["t_serial"].first()
+        for p, color in zip(procesos, tonos_de_azul(len(procesos))):
+            linea = c[c["P"] == p].sort_values("N")
+            eje.plot(linea["N"], linea["t_mediana"], "o-", color=color, label=f"MPI, P = {p}")
+        eje.plot(serial.index, serial.values, "s--", color=NARANJA, label="Serial")
+        eje.set_xscale("log")
+        eje.set_yscale("log")
+        eje.set_xlabel("N (cantidad de muestras)")
+        eje.set_title(f"{NOMBRE[constante]} — sistema: {sistema}")
+    ejes[0].set_ylabel("Tiempo mediano (s)")
+    ejes[1].legend(loc="center left", bbox_to_anchor=(1, 0.5))
+    fig.tight_layout()
+    fig.savefig(os.path.join(CARPETA, f"tiempo_n_{sistema}.png"), dpi=150)
+    plt.close(fig)
+
+
+
+
+
+# Comprueba que paralelizar no empeora la precisión: el error depende de N y no de P.
+# Como el error esperado cambia con N, cada error se divide por su valor teórico σ/√N;
+# así se pueden juntar las ejecuciones de todos los N y el resultado tiene que dar cerca de 1.
+# Si diera bastante más que 1 al aumentar P, los procesos estarían generando números
+# aleatorios correlacionados entre sí (semillas mal independizadas).
+def grafico_error_por_procesos(datos):
+    """Error normalizado (error / (σ/√N)) de la versión serial y de cada P."""
+    # Con la misma semilla dos sistemas dan la misma estimación: se cuenta una sola vez.
+    d = datos.drop_duplicates(["programa", "constante", "N", "P", "semilla", "estimacion"]).copy()
+    d["error_norm"] = d["error_abs"] * np.sqrt(d["N"]) / d["constante"].map(SIGMA)
+    d["caso"] = np.where(d["programa"] == "serial", "serial", "P = " + d["P"].astype(str))
+    casos = ["serial"] + [f"P = {p}" for p in sorted(d[d["programa"] == "mpi"]["P"].unique())]
+
+    fig, eje = plt.subplots(figsize=(8, 5))
+    eje.axhline(1, linestyle="--", color=GRIS, linewidth=1.5, label="Teoría: σ/√N")
+    for constante, color in zip(["pi", "e"], [AZUL, NARANJA]):
+        c = d[d["constante"] == constante]
+        # Raíz del error cuadrático medio de todas las ejecuciones de cada caso
+        error = c.groupby("caso")["error_norm"].apply(lambda e: math.sqrt((e ** 2).mean())).reindex(casos)
+        eje.plot(casos, error.values, "o-", color=color, markersize=8, label=NOMBRE[constante])
+        print(f"Error normalizado de {constante}: "
+              + ", ".join(f"{caso}: {valor:.2f}" for caso, valor in error.items()))
+    eje.set_ylim(0, 2)
+    eje.set_ylabel("Error medido / error teórico")
+    eje.set_title("El error no depende de la cantidad de procesos")
+    eje.legend()
+    fig.tight_layout()
+    fig.savefig(os.path.join(CARPETA, "error_procesos.png"), dpi=150)
+    plt.close(fig)
+
+
+
+
+
+# Compara el speedup o la eficiencia de los distintos sistemas usando el N más grande.
+# Se puede ver cómo decae el rendimiento al agregar más procesos debido
+# al tiempo que se pierde en la comunicación de MPI.
+def grafico_entre_sistemas(resumen, columna, titulo, etiqueta, archivo):
+    """Speedup o eficiencia con el N más grande medido en todos los sistemas, una línea por sistema."""
+    sistemas = sorted(resumen["sistema"].unique())
+    n = min(resumen[resumen["sistema"] == s]["N"].max() for s in sistemas)
+    procesos = sorted(resumen["P"].unique())
+    fig, ejes = plt.subplots(1, 2, figsize=(11, 4.5), sharey=True)
+    for eje, constante in zip(ejes, ["pi", "e"]):
+        if columna == "speedup":
+            eje.plot(procesos, procesos, "--", color=GRIS, linewidth=1.5, label="Ideal")
+        else:
+            eje.axhline(1, linestyle="--", color=GRIS, linewidth=1.5, label="Ideal")
         for sistema, color in zip(sistemas, [AZUL, NARANJA, "#1baf7a"]):
             linea = resumen[(resumen["sistema"] == sistema) & (resumen["constante"] == constante)
                             & (resumen["N"] == n)]
-            eje.plot(linea["P"], linea["eficiencia"], "o-", color=color, label=sistema)
-        eje.set_ylim(0, 1.3)
-        eje_de_procesos(eje, sorted(resumen["P"].unique()))
-        eje.set_title(f"Eficiencia — {NOMBRE[constante]} con N = {potencia(n)}")
-    ejes[0].set_ylabel("Eficiencia = speedup / P")
+            eje.plot(linea["P"], linea[columna], "o-", color=color, label=sistema)
+        logaritmico = eje_de_procesos(eje, procesos)
+        if columna == "eficiencia":
+            eje.set_ylim(0, 1.3)
+        elif logaritmico:
+            eje_de_speedup_logaritmico(eje, procesos)
+        eje.set_title(f"{titulo} — {NOMBRE[constante]} con N = {potencia(n)}")
+    ejes[0].set_ylabel(etiqueta)
     ejes[1].legend(loc="center left", bbox_to_anchor=(1, 0.5))
     fig.tight_layout()
-    fig.savefig(os.path.join(CARPETA, "eficiencia.png"), dpi=150)
+    fig.savefig(os.path.join(CARPETA, archivo), dpi=150)
     plt.close(fig)
 
 
@@ -251,11 +334,14 @@ def main():
     grafico_intuicion()
     grafico_convergencia(datos)
     grafico_error(datos)
+    grafico_error_por_procesos(datos)
     for sistema in sorted(resumen["sistema"].unique()):
         grafico_por_procesos(resumen, sistema, "t_mediana", "Tiempo mediano (s)", f"tiempo_{sistema}.png")
+        grafico_tiempo_por_n(resumen, sistema)
         grafico_por_procesos(resumen, sistema, "speedup", "Speedup = T serial / T paralelo",
                              f"speedup_{sistema}.png")
-    grafico_eficiencia(resumen)
+    grafico_entre_sistemas(resumen, "speedup", "Speedup", "Speedup = T serial / T paralelo", "speedup.png")
+    grafico_entre_sistemas(resumen, "eficiencia", "Eficiencia", "Eficiencia = speedup / P", "eficiencia.png")
     print(f"Gráficos guardados en {CARPETA}/")
 
 
