@@ -4,7 +4,7 @@
 
 **Asignatura:** Computación Científica / Métodos Numéricos II  
 **Institución:** Facultad de Ciencias Exactas y Tecnología (FACET) – Universidad Nacional de Tucumán (UNT)  
-**Repositorio:** [pi-y-e-metodo-montecarlo](https://github.com/belenason/pi-y-e-metodo-montecarlo)
+**Repositorio:** [pi-y-e-metodo-montecarlo](https://github.com/belenason/pi-y-e-metodo-montecarlo) ||
 **Informe:** [Proyecto HPC Computación Científica - Informe ](https://docs.google.com/document/d/1fGytDr1ASnMOOjRSOQSA6F3Cjop2hToPlUJomgpMeCc/edit?usp=sharing)
 
 ## Integrantes
