@@ -1,0 +1,15 @@
+gcc -O2 -Wall -Wextra montecarlo_pi_serial.c -o montecarlo_pi_serial -lm
+gcc -O2 -Wall -Wextra montecarlo_e_serial.c -o montecarlo_e_serial -lm
+mpicc -O2 -Wall -Wextra montecarlo_pi_mpi.c -o montecarlo_pi_mpi -lm
+mpicc -O2 -Wall -Wextra montecarlo_e_mpi.c -o montecarlo_e_mpi -lm
+pi con N = 100000
+pi con N = 1000000
+pi con N = 10000000
+pi con N = 100000000
+pi con N = 1000000000
+e con N = 100000
+e con N = 1000000
+e con N = 10000000
+e con N = 100000000
+e con N = 1000000000
+Listo. Resultados en resultados/tiempos_cluster.csv
