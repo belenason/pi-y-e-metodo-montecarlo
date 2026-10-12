@@ -1,9 +1,14 @@
 """Calcula las métricas y genera los gráficos del proyecto.
 
-Uso:   python graficos.py
+Uso:
+    python graficos.py resultados/pc_2026-10-11
+        lee los tiempos_<sistema>.csv de esa carpeta y deja los gráficos en la misma carpeta.
+    python graficos.py resultados/pc_2026-10-11 resultados/cluster_2026-10-12
+        junta los sistemas de varias carpetas (para compararlos) y deja los gráficos
+        en resultados/comparacion. Con --salida <carpeta> se elige otro destino.
 
-Este codigo lee todos los archivos resultados/tiempos_<sistema>.csv que haya (uno por
-sistema medido) y genera en resultados/:
+Este codigo lee todos los archivos tiempos_<sistema>.csv de las carpetas indicadas (uno por
+sistema medido) y genera en la carpeta de salida:
 
     resumen.csv              mediana del tiempo, speedup y eficiencia
     intuicion.png            grafico para explicar cómo funcionan los dos experimentos
@@ -16,6 +21,7 @@ sistema medido) y genera en resultados/:
     speedup.png              compara el speedup entre todos los sistemas evaluados
     eficiencia.png           grafica final para comparar eficiencia entre todos los sistemas evaluados
 """
+import argparse
 import glob
 import math
 import os
@@ -26,7 +32,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-CARPETA = "resultados"
+CARPETA = "resultados"   # carpeta de salida; se define en main()
 REAL = {"pi": math.pi, "e": math.e}
 NOMBRE = {"pi": "π", "e": "e"}
 
@@ -43,15 +49,16 @@ plt.rcParams.update({"axes.grid": True, "axes.axisbelow": True, "grid.color": "#
                      "axes.spines.right": False, "lines.linewidth": 2, "legend.frameon": False})
 
 
-def cargar_datos():
-    """Une los CSV de todos los sistemas en una sola tabla."""
+def cargar_datos(carpetas):
+    """Une los CSV de todos los sistemas de las carpetas indicadas en una sola tabla."""
     tablas = []
-    for archivo in sorted(glob.glob(os.path.join(CARPETA, "tiempos_*.csv"))):
+    archivos = sorted(a for c in carpetas for a in glob.glob(os.path.join(c, "tiempos_*.csv")))
+    for archivo in archivos:
         tabla = pd.read_csv(archivo)
         tabla["sistema"] = os.path.basename(archivo)[len("tiempos_"):-len(".csv")]
         tablas.append(tabla)
     if not tablas:
-        raise SystemExit("No hay resultados. Correr antes ./benchmark.sh <sistema>")
+        raise SystemExit("No hay tiempos_*.csv en las carpetas indicadas. Correr antes ./benchmark.sh <sistema>")
     return pd.concat(tablas, ignore_index=True)
 
 
@@ -326,7 +333,16 @@ def grafico_entre_sistemas(resumen, columna, titulo, etiqueta, archivo):
 
 
 def main():
-    datos = cargar_datos()
+    global CARPETA
+    parser = argparse.ArgumentParser(description="Métricas y gráficos del proyecto")
+    parser.add_argument("carpetas", nargs="+", help="carpetas de corridas con los tiempos_<sistema>.csv")
+    parser.add_argument("--salida", help="carpeta donde guardar los gráficos "
+                        "(por defecto la carpeta de la corrida, o resultados/comparacion si son varias)")
+    args = parser.parse_args()
+    CARPETA = args.salida or (args.carpetas[0] if len(args.carpetas) == 1 else os.path.join("resultados", "comparacion"))
+    os.makedirs(CARPETA, exist_ok=True)
+
+    datos = cargar_datos(args.carpetas)
     resumen = calcular_resumen(datos)
     resumen.to_csv(os.path.join(CARPETA, "resumen.csv"), index=False, float_format="%.4f")
     print(resumen.to_string(index=False, float_format=lambda v: f"{v:.4f}"))

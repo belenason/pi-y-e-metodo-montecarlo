@@ -1,0 +1,12 @@
+make: Nothing to be done for 'all'.
+pi con N = 100000
+pi con N = 1000000
+pi con N = 10000000
+pi con N = 100000000
+pi con N = 1000000000
+e con N = 100000
+e con N = 1000000
+e con N = 10000000
+e con N = 100000000
+e con N = 1000000000
+Listo. Resultados en resultados/tiempos_pc.csv

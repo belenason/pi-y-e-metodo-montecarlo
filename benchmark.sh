@@ -1,9 +1,15 @@
 #!/bin/bash
-#  Script que ejecuta todas las pruebas de rendimiento(serial y paralelo) y guarda los resultados en resultados/tiempos_<sistema>.csv
+#  Script que ejecuta todas las pruebas de rendimiento(serial y paralelo) y guarda los resultados en resultados/<corrida>/tiempos_<sistema>.csv
 #
 # Uso:
 #   ./benchmark.sh pc
 #   ./benchmark.sh servidor
+#
+# Los resultados se guardan en resultados/<CORRIDA>/. Por defecto CORRIDA es
+# <sistema>_<fecha> (por ejemplo pc_2026-10-11), así cada corrida queda en su propia
+# carpeta y no pisa a las anteriores. Para elegir el nombre:
+#   CORRIDA=pc_enchufada ./benchmark.sh pc
+# Si la carpeta ya existe el script se detiene en lugar de sobrescribir.
 #
 # Se puede cambiar qué se prueba con variables de entorno, por ejemplo:
 #   TAMANIOS="100000 1000000" REPETICIONES=3 ./benchmark.sh prueba
@@ -24,19 +30,26 @@ REPETICIONES=${REPETICIONES:-5}
 # --oversubscribe permite lanzar más procesos que núcleos físicos (por ejemplo 8 en una PC de 4 núcleos)
 OPCIONES_MPI=${OPCIONES_MPI:-"--oversubscribe"}
 
+CORRIDA=${CORRIDA:-${SISTEMA}_$(date +%Y-%m-%d)}
+CARPETA=resultados/$CORRIDA
+if [ -e "$CARPETA" ]; then
+    echo "La carpeta $CARPETA ya existe. Elegí otro nombre con CORRIDA=<nombre> o borrala." >&2
+    exit 1
+fi
+
 make || exit 1
 
-mkdir -p resultados
-SALIDA=resultados/tiempos_$SISTEMA.csv
+mkdir -p "$CARPETA"
+SALIDA=$CARPETA/tiempos_$SISTEMA.csv
 
 # Se guarda la descripción del sistema para el informe(CPU, nucleos reales y limites). En un contenedor,
 # lscpu muestra la máquina completa; lo realmente asignado se ve con nproc
 # y con el límite de CPU del contenedor.
 #Nos sirve para saber de donde corrio la prueba para armar el informe
-lscpu > resultados/sistema_$SISTEMA.txt
-echo "CPUs disponibles (nproc): $(nproc)" >> resultados/sistema_$SISTEMA.txt
+lscpu > $CARPETA/sistema_$SISTEMA.txt
+echo "CPUs disponibles (nproc): $(nproc)" >> $CARPETA/sistema_$SISTEMA.txt
 if [ -f /sys/fs/cgroup/cpu.max ]; then
-    echo "Limite de CPU del contenedor (cpu.max): $(cat /sys/fs/cgroup/cpu.max)" >> resultados/sistema_$SISTEMA.txt
+    echo "Limite de CPU del contenedor (cpu.max): $(cat /sys/fs/cgroup/cpu.max)" >> $CARPETA/sistema_$SISTEMA.txt
 fi
 
 
