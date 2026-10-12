@@ -18,6 +18,7 @@ sistema medido) y genera en la carpeta de salida:
     tiempo_<sistema>.png     tiempo en función de la cantidad de procesos
     tiempo_n_<sistema>.png   tiempo en función de N, con la versión serial incluida
     speedup_<sistema>.png    muestra el speedup obtenido en función de la cantidad de procesos
+    speedup_<sistema>_n_grande.png   lo mismo, solo con los N a partir de 10^7
     speedup.png              compara el speedup entre todos los sistemas evaluados
     eficiencia.png           grafica final para comparar eficiencia entre todos los sistemas evaluados
 """
@@ -75,6 +76,16 @@ def calcular_resumen(datos):
     resumen["speedup"] = resumen["t_serial"] / resumen["t_mediana"]     # S = T_serial / T_P
     resumen["eficiencia"] = resumen["speedup"] / resumen["P"]           # E = S / P
     return resumen.sort_values(["sistema", "constante", "N", "P"])
+
+
+def ejecuciones_distintas(datos):
+    """Quita las ejecuciones repetidas entre sistemas.
+
+    Con la misma semilla y la misma cantidad de procesos, dos sistemas generan exactamente
+    los mismos números y dan la misma estimación. Para el análisis del error esas ejecuciones
+    son una sola muestra y se cuentan una única vez.
+    """
+    return datos.drop_duplicates(["programa", "constante", "N", "P", "semilla", "estimacion"])
 
 
 def potencia(n):
@@ -153,6 +164,7 @@ def grafico_intuicion():
 # Grafica cómo las estimaciones (los puntos) se van acercando y estabilizando 
 # en el valor real (línea negra) a medida que aumento la cantidad de muestras (N).
 def grafico_convergencia(datos):
+    datos = ejecuciones_distintas(datos)
     fig, ejes = plt.subplots(1, 2, figsize=(11, 4.5))
     for eje, constante, color in zip(ejes, ["pi", "e"], [AZUL, NARANJA]):
         d = datos[datos["constante"] == constante]
@@ -177,6 +189,7 @@ def grafico_convergencia(datos):
 # baja clavado a un ritmo de 1/√N, coincidiendo exactamente con la teoría.
 def grafico_error(datos):
     """Error medido contra la recta teórica sigma / raíz(N), en escala log-log."""
+    datos = ejecuciones_distintas(datos)
     fig, eje = plt.subplots(figsize=(7, 5))
     for constante, color in zip(["pi", "e"], [AZUL, NARANJA]):
         d = datos[datos["constante"] == constante]
@@ -203,12 +216,13 @@ def grafico_error(datos):
 
 
 
-# Grafica el tiempo o el speedup según la cantidad de procesos (P). 
-# Acá se ve claro que con un N más grande, se aprovecha mejor el paralelismo 
-# y la curva se pega más al speedup ideal (Ley de Amdahl).
-def grafico_por_procesos(resumen, sistema, columna, etiqueta, archivo):
+# Grafica el tiempo o el speedup según la cantidad de procesos (P).
+# Con N grande el costo fijo de sincronizar y reducir es despreciable frente al cómputo
+# y la curva se acerca al speedup ideal. Con N chico ese costo fijo pesa y la curva se aplana.
+# n_minimo permite dejar fuera los N chicos, cuyos tiempos (de milisegundos) son poco confiables.
+def grafico_por_procesos(resumen, sistema, columna, etiqueta, archivo, n_minimo=0):
     """Tiempo o speedup en función de P: un panel por constante y una línea por cada N."""
-    r = resumen[resumen["sistema"] == sistema]
+    r = resumen[(resumen["sistema"] == sistema) & (resumen["N"] >= n_minimo)]
     procesos = sorted(r["P"].unique())
     fig, ejes = plt.subplots(1, 2, figsize=(11, 4.5), sharey=True)
     for eje, constante in zip(ejes, ["pi", "e"]):
@@ -236,8 +250,8 @@ def grafico_por_procesos(resumen, sistema, columna, etiqueta, archivo):
 
 # Grafica el tiempo según la cantidad de muestras (N), con la versión serial como referencia.
 # El tiempo de cómputo crece en forma lineal con N (rectas paralelas en log-log). Con N chico
-# las versiones paralelas quedan por encima de la serial: lanzar y comunicar los procesos
-# cuesta más que lo que se ahorra, y recién a partir de cierto N conviene paralelizar.
+# y muchos procesos las curvas se aplanan: el costo fijo de sincronizar y reducir los resultados
+# pasa a ser comparable con el cómputo. El lanzamiento de los procesos no entra en el tiempo medido.
 def grafico_tiempo_por_n(resumen, sistema):
     """Tiempo en función de N: un panel por constante, la serial y una línea por cada P."""
     r = resumen[resumen["sistema"] == sistema]
@@ -271,8 +285,7 @@ def grafico_tiempo_por_n(resumen, sistema):
 # aleatorios correlacionados entre sí (semillas mal independizadas).
 def grafico_error_por_procesos(datos):
     """Error normalizado (error / (σ/√N)) de la versión serial y de cada P."""
-    # Con la misma semilla dos sistemas dan la misma estimación: se cuenta una sola vez.
-    d = datos.drop_duplicates(["programa", "constante", "N", "P", "semilla", "estimacion"]).copy()
+    d = ejecuciones_distintas(datos).copy()
     d["error_norm"] = d["error_abs"] * np.sqrt(d["N"]) / d["constante"].map(SIGMA)
     d["caso"] = np.where(d["programa"] == "serial", "serial", "P = " + d["P"].astype(str))
     casos = ["serial"] + [f"P = {p}" for p in sorted(d[d["programa"] == "mpi"]["P"].unique())]
@@ -299,8 +312,7 @@ def grafico_error_por_procesos(datos):
 
 
 # Compara el speedup o la eficiencia de los distintos sistemas usando el N más grande.
-# Se puede ver cómo decae el rendimiento al agregar más procesos debido
-# al tiempo que se pierde en la comunicación de MPI.
+# Muestra hasta qué cantidad de procesos cada sistema mantiene un speedup cercano al ideal.
 def grafico_entre_sistemas(resumen, columna, titulo, etiqueta, archivo):
     """Speedup o eficiencia con el N más grande medido en todos los sistemas, una línea por sistema."""
     sistemas = sorted(resumen["sistema"].unique())
@@ -356,6 +368,8 @@ def main():
         grafico_tiempo_por_n(resumen, sistema)
         grafico_por_procesos(resumen, sistema, "speedup", "Speedup = T serial / T paralelo",
                              f"speedup_{sistema}.png")
+        grafico_por_procesos(resumen, sistema, "speedup", "Speedup = T serial / T paralelo",
+                             f"speedup_{sistema}_n_grande.png", n_minimo=10 ** 7)
     grafico_entre_sistemas(resumen, "speedup", "Speedup", "Speedup = T serial / T paralelo", "speedup.png")
     grafico_entre_sistemas(resumen, "eficiencia", "Eficiencia", "Eficiencia = speedup / P", "eficiencia.png")
     print(f"Gráficos guardados en {CARPETA}/")
