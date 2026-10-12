@@ -1,4 +1,3 @@
-
 # Estimación de π y e mediante el Método de Monte Carlo
 
 **Implementación secuencial en C y paralela con Open MPI**
@@ -6,65 +5,46 @@
 **Asignatura:** Computación Científica / Métodos Numéricos II  
 **Institución:** Facultad de Ciencias Exactas y Tecnología (FACET) – Universidad Nacional de Tucumán (UNT)  
 **Repositorio:** [pi-y-e-metodo-montecarlo](https://github.com/belenason/pi-y-e-metodo-montecarlo)
-
----
+**Informe:** [Proyecto HPC Computación Científica - Informe ](https://docs.google.com/document/d/1fGytDr1ASnMOOjRSOQSA6F3Cjop2hToPlUJomgpMeCc/edit?usp=sharing)
 
 ## Integrantes
 
-- **Ason, Belén.**
-- **Cano Arce, Valentina.**
-- **Caballero, Leonardo.**
+- Ason, Belén
+- Cano Arce, Valentina
+- Caballero, Leonardo
 
 ---
 
-## Descripción del proyecto
+## Descripción
 
-Este proyecto implementa y evalúa la estimación de las constantes matemáticas π y e mediante el **método de Monte Carlo**, una técnica numérica basada en el uso de muestras aleatorias para obtener aproximaciones de problemas matemáticos.
+El proyecto estima las constantes π y e con el método de Monte Carlo y mide el rendimiento de una versión secuencial y otra paralela con MPI (modelo SPMD, reparto estático de las muestras, `MPI_Bcast` y `MPI_Reduce`).
 
-El objetivo es estudiar tanto la precisión de las estimaciones como el rendimiento computacional de las implementaciones secuenciales y paralelas, aplicando conceptos de **Computación de Alto Rendimiento (HPC)**.
+- **π:** se sortean puntos en el cuadrado unitario y se cuenta la fracción que cae dentro del cuarto de círculo.
+- **e:** se cuenta cuántos números uniformes en [0, 1) hay que sumar para superar 1; el promedio de esa cantidad tiende a e.
 
-El desarrollo comprende las siguientes etapas:
+Cada proceso MPI usa la semilla `semilla + rank` con `srand48`/`drand48`. El tiempo se mide solo sobre el cómputo y la reducción (después de una barrera), sin incluir el lanzamiento de los procesos.
 
-1. **Implementación secuencial en C11:** desarrollo de las versiones secuenciales para π y e, utilizadas como línea base para comparar el rendimiento. La medición del tiempo de ejecución se realiza mediante `clock_gettime(CLOCK_MONOTONIC)`.
+La metodología, los resultados y su análisis están en el informe.
 
-2. **Implementación paralela con Open MPI:** distribución del trabajo entre procesos mediante el modelo SPMD (*Single Program, Multiple Data*). Se utilizan operaciones colectivas como `MPI_Bcast` y `MPI_Reduce`, distribución estática de las muestras y semillas diferenciadas por proceso mediante `srand48(semilla + rank)`.
-
-3. **Automatización de pruebas:** ejecución de experimentos con diferentes cantidades de muestras (\(N = 10^5\) a \(10^9\)) y procesos (\(P = 1, 2, 4, 8, 16\)). Se utiliza un script Bash para automatizar las ejecuciones y calcular la mediana de cinco repeticiones consecutivas, reduciendo la influencia de variaciones ocasionales en los tiempos de ejecución.
-
-4. **Análisis y visualización de resultados:** procesamiento de los datos mediante Python y generación de gráficos para analizar la aceleración (*speedup*), la eficiencia paralela y la convergencia del error en función de la cantidad de muestras. Los resultados permiten estudiar el comportamiento del programa paralelo y relacionarlo con la ley de Amdahl.
-
----
-
-## Estructura del repositorio
+## Estructura
 
 ```text
 .
-├── montecarlo.h              # Cabecera principal
-├── montecarlo_pi.h           # Definiciones para la estimación de π
-├── montecarlo_e.h            # Definiciones para la estimación de e
-├── montecarlo_pi_serial.c    # Implementación secuencial de π
-├── montecarlo_e_serial.c     # Implementación secuencial de e
-├── montecarlo_pi_mpi.c       # Implementación paralela de π con MPI
-├── montecarlo_e_mpi.c        # Implementación paralela de e con MPI
-├── Makefile                  # Compilación automatizada
-├── benchmark.sh              # Automatización de pruebas y mediciones
-├── graficos.py               # Procesamiento y generación de gráficos
-└── README.md                 # Documentación del proyecto
+├── montecarlo.h                          # Lectura de argumentos y formato de salida
+├── montecarlo_pi.h / montecarlo_e.h      # Núcleo de cada estimación
+├── montecarlo_pi_serial.c / montecarlo_e_serial.c   # Versiones secuenciales
+├── montecarlo_pi_mpi.c / montecarlo_e_mpi.c         # Versiones paralelas (MPI)
+├── Makefile                              # Compilación
+├── benchmark.sh                          # Automatiza las mediciones
+├── graficos.py                           # Métricas y gráficos a partir de las mediciones
+└── resultados/                           # Una carpeta por corrida y las comparaciones
 ```
-
----
 
 ## Requisitos
 
-Para compilar y ejecutar el proyecto se necesita:
-
-- **GCC:** compilador de C con soporte para C11.
-- **Open MPI o MPICH:** biblioteca de paso de mensajes, con herramientas como `mpicc` y `mpirun`.
-- **Sistema operativo:** Linux o Unix. También puede utilizarse un clúster de cómputo compatible.
-- **Python 3:** para el análisis de resultados y la generación de gráficos.
-- **Bibliotecas de Python:** `pandas`, `numpy` y `matplotlib`.
-
-### Instalación en Ubuntu/Debian
+- Linux (o WSL en Windows). El script usa Bash, `lscpu` y `nproc`.
+- `gcc` y Open MPI (`mpicc`, `mpirun`).
+- Para los gráficos: Python 3 con `pandas`, `numpy` y `matplotlib`.
 
 ```bash
 sudo apt update
@@ -72,177 +52,69 @@ sudo apt install build-essential openmpi-bin libopenmpi-dev \
     python3-pandas python3-numpy python3-matplotlib
 ```
 
----
-
 ## Compilación y ejecución
 
-### 1. Compilar el proyecto
-
-Desde el directorio raíz del repositorio, ejecutar:
-
 ```bash
-make
+make          # compila los cuatro programas (gcc/mpicc -O2)
+make clean    # borra los ejecutables
 ```
 
-El `Makefile` permite compilar los programas utilizando las opciones de optimización configuradas, entre ellas `-O3`.
-
-Para eliminar los ejecutables generados:
-
-```bash
-make clean
-```
-
-### 2. Ejecutar las versiones secuenciales
-
-Las implementaciones secuenciales reciben como argumentos la cantidad de muestras y la semilla del generador pseudoaleatorio.
-
-**Formato:**
-
-```bash
-./binario <N_muestras> <semilla>
-```
-
-**Ejemplos:**
+Todos los programas se invocan como `<N> [semilla]` (semilla por defecto: 12345) e imprimen una línea CSV: `constante,N,P,semilla,estimacion,error_abs,tiempo_s`.
 
 ```bash
 ./montecarlo_pi_serial 100000000 12345
-./montecarlo_e_serial 100000000 12345
+mpirun -np 4 ./montecarlo_pi_mpi 100000000 12345
 ```
 
-### 3. Ejecutar las versiones paralelas con MPI
+Si se piden más procesos que núcleos disponibles, agregar `--oversubscribe` a `mpirun`.
 
-Para ejecutar una implementación paralela, se especifica la cantidad de procesos mediante `mpirun`.
+## Benchmarking
 
-**Formato:**
+Ejecutar siempre **desde la raíz del repositorio**:
 
 ```bash
-mpirun -n <num_procesos> ./binario <N_muestras> <semilla>
+bash benchmark.sh <sistema>
 ```
 
-**Ejemplos:**
+`<sistema>` es una etiqueta para identificar la máquina (por ejemplo `pc` o `cluster`); por defecto es `pc`. El script compila con `make`, y para π y e, cada N y cada P ejecuta la versión serial y la MPI, repitiendo todo `REPETICIONES` veces con semillas distintas.
+
+Configuración por defecto, modificable con variables de entorno:
+
+| Variable | Por defecto | Descripción |
+|---|---|---|
+| `TAMANIOS` | `100000 1000000 10000000 100000000 1000000000` | Valores de N |
+| `PROCESOS` | `1 2 4 8` | Valores de P |
+| `REPETICIONES` | `5` | Repeticiones por configuración |
+| `OPCIONES_MPI` | `--oversubscribe` | Opciones extra para `mpirun` |
+| `CORRIDA` | `<sistema>_<fecha>` | Nombre de la carpeta en `resultados/` |
+
+Ejemplos:
 
 ```bash
-mpirun -n 4 ./montecarlo_pi_mpi 100000000 12345
-mpirun -n 4 ./montecarlo_e_mpi 100000000 12345
+# Prueba rápida para verificar que todo funciona
+TAMANIOS="100000 1000000" PROCESOS="1 2" REPETICIONES=2 CORRIDA=prueba bash benchmark.sh prueba
+
+# Corrida en el clúster (contenedor con 48 núcleos asignados)
+PROCESOS="1 2 4 8 12 16 24 32 48" OPCIONES_MPI="--bind-to none --oversubscribe" bash benchmark.sh cluster
 ```
 
-Si se necesita ejecutar más procesos que los espacios de ejecución disponibles localmente, se puede utilizar `--oversubscribe`:
+Cada corrida deja en `resultados/<corrida>/` el archivo `tiempos_<sistema>.csv` (una fila por ejecución) y `sistema_<sistema>.txt` (salida de `lscpu`, `nproc` y límite de CPU del contenedor). Si la carpeta ya existe, el script se detiene para no pisar resultados anteriores.
+
+### Gráficos y métricas
 
 ```bash
-mpirun -n 8 --oversubscribe ./montecarlo_pi_mpi 100000000 12345
+python3 graficos.py resultados/pc_2026-10-11                  # una corrida
+python3 graficos.py resultados/pc_2026-10-11 resultados/cluster_2026-10-11   # comparación
 ```
 
-> **Nota:** la opción `--oversubscribe` permite ejecutar más procesos de los espacios de ejecución disponibles, pero no garantiza una mejora del rendimiento.
+Calcula la mediana de las repeticiones, el speedup (`T_serial / T_P`) y la eficiencia (`speedup / P`), y guarda `resumen.csv` y los gráficos en la carpeta de la corrida (o en `resultados/comparacion` si se indican varias; se cambia con `--salida`).
 
-### 4. Ejecutar el benchmarking
+### Qué controlar antes de medir
 
-El script `benchmark.sh` automatiza las pruebas con diferentes cantidades de muestras y procesos, realiza las repeticiones configuradas y obtiene las medianas de los tiempos medidos.
-
-```bash
-chmod +x benchmark.sh
-./benchmark.sh
-```
-
-Una vez generados los resultados, ejecutar el script de Python para producir los gráficos:
-
-```bash
-python3 graficos.py
-```
-
-Los rangos de muestras, las cantidades de procesos y los archivos de salida dependen de la configuración implementada en los scripts.
-
----
-
-
-## Métricas de rendimiento
-
-### Aceleración (*Speedup*)
-
-Mide cuánto más rápida es la ejecución paralela respecto de la secuencial.
-
-$$
-S_P = \frac{T_1}{T_P}
-$$
-
-Donde:
-
-- $T_1$: tiempo de ejecución de referencia secuencial.
-- $T_P$: tiempo de ejecución utilizando $P$ procesos.
-
-### Eficiencia paralela
-
-Indica qué tan eficazmente se aprovechan los procesos disponibles.
-
-$$
-E_P = \frac{S_P}{P} \times 100\%
-$$
-
-Una eficiencia cercana al 100 % representa un aprovechamiento ideal de los procesos según esta métrica.
-
-### Error relativo porcentual
-
-Permite medir la diferencia entre la estimación obtenida y el valor de referencia de la constante.
-
-$$
-E_{\mathrm{rel}} =
-\left|
-\frac{\text{Estimación} - \text{Valor real}}
-{\text{Valor real}}
-\right| \times 100\%
-$$
-
-Cuanto menor sea el error relativo, más cercana será la estimación al valor de referencia.
-
-### Convergencia del error
-
-En los métodos de Monte Carlo, el error estadístico típico disminuye aproximadamente según:
-
-$$
-E(N) = \mathcal{O}\left(\frac{1}{\sqrt{N}}\right)
-$$
-
-Esto significa que, para reducir el error típico aproximadamente a la mitad, se necesita multiplicar por cuatro la cantidad de muestras, suponiendo condiciones estadísticas comparables.
-
-### Ley de Amdahl
-
-La ley de Amdahl permite analizar los límites teóricos de la aceleración de un programa paralelo cuando una parte de su ejecución permanece secuencial.
-
-$$
-S(P) = \frac{1}{(1-f) + \frac{f}{P}}
-$$
-
-Donde:
-
-- $S(P)$: aceleración teórica con $P$ procesos.
-- $f$: fracción del programa que puede paralelizarse.
-- $1-f$: fracción secuencial del programa.
-- $P$: cantidad de procesos utilizados.
-
-## Optimizaciones avanzadas y trabajo futuro
-
-Como posibles líneas de mejora, se plantean las siguientes optimizaciones:
-
-1. **Generador pseudoaleatorio:** sustituir `drand48` por un generador como `xoshiro256**`, utilizando mecanismos de salto (*jump*) para obtener subsecuencias diferenciadas entre procesos. La independencia estadística debe verificarse; las semillas o los saltos, por sí solos, no garantizan una ausencia absoluta de solapamientos.
-
-2. **Bit-packing y aritmética entera:** explorar la generación de coordenadas a partir de números aleatorios de 64 bits y el uso de operaciones enteras para reducir el costo de generación y evaluación de muestras.
-
-3. **Vectorización SIMD (AVX-512):** evaluar el procesamiento simultáneo de múltiples muestras mediante instrucciones vectoriales, aprovechando las capacidades del procesador y las características de la implementación.
-
-4. **Paralelismo híbrido y aceleración por GPU:** extender la solución mediante una combinación de MPI, OpenMP y CUDA, con el objetivo de aprovechar tanto el paralelismo entre procesos como los recursos multinúcleo y las GPU. Para la generación aleatoria en GPU, puede evaluarse el uso de `cuRAND`.
-
-Estas mejoras permitirían estudiar nuevas estrategias de optimización y comparar su impacto en los tiempos de ejecución, la escalabilidad y la eficiencia.
-
----
-
-## Tecnologías utilizadas
-
-- **C11:** implementación de los algoritmos secuenciales y paralelos.
-- **Open MPI:** comunicación y distribución del trabajo entre procesos.
-- **GCC:** compilación y optimización del código.
-- **Bash:** automatización de experimentos.
-- **Python:** procesamiento de datos y visualización de resultados.
-- **NumPy, pandas y Matplotlib:** análisis numérico, organización de datos y generación de gráficos.
-- **Git y GitHub:** control de versiones y gestión del repositorio.
-
----
-
+1. **Núcleos reales:** el máximo de `PROCESOS` no debería superar los núcleos físicos disponibles (`nproc`; en un contenedor, el límite de `cpu.max`). Con `--oversubscribe` por encima de ese valor los tiempos dejan de ser interpretables.
+2. **Máquina sin otra carga:** cerrar otras aplicaciones; en notebook, conectarla a la corriente y evitar el modo ahorro de energía. Idealmente no tocar la máquina durante la corrida.
+3. **Duración:** con los valores por defecto el N = 10⁹ domina el tiempo total. Conviene hacer primero la prueba rápida y estimar la duración antes de la corrida completa (o correrla con `nohup`/`tmux` si es remota).
+4. **Contenedores:** `--bind-to none` evita errores de Open MPI al fijar procesos a núcleos que el contenedor no asigna.
+5. **Semillas:** el script usa `REP*100000 + P*1000` (más el rank en MPI), lo que evita repetir semillas dentro de una corrida mientras P < 100. Si se usan más procesos, revisar esa fórmula.
+6. **Corridas repetidas en distintos sistemas:** con la misma semilla y P, dos sistemas dan la misma estimación; `graficos.py` ya lo contempla al analizar el error.
+7. **Nombre de la corrida:** al correr en otra fecha o máquina usar un `CORRIDA` explícito si se quiere conservar la anterior; `graficos.py` toma el nombre del sistema del archivo `tiempos_<sistema>.csv`, así que cada sistema comparado debe usar una etiqueta distinta.
